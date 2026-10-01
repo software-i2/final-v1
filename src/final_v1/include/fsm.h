@@ -16,6 +16,7 @@ enum class State {
     CLOSEJAW,   // closing on the handle
     RETARGET,   // cant find a path to handle; take new frames and try again
     REPARK,     // used up all retargets; move to new parking spot
+    MANUAL,     // going where a manual command sent the arm
     SUCCESS,    // sequence complete, regardless if jaw caught anything or not
     FAIL,       // something went wrong
     ESTOP       // contact or a stop request; the arm is released
@@ -25,6 +26,7 @@ enum class Event {
     NONE,
     START,
     STOP,
+    GOTO,            // a manual command; takes the arm from any state
     STREAMING,
     NO_STREAM,
     FRAMES_IN,

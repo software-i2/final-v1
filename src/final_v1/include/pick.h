@@ -116,6 +116,9 @@ public:
     void requestStop() { stop_requested_ = true; }
     // Sends the arm home, unless the arm is not to move.
     bool reset(std::string &message);
+    // Manual commands: each takes the arm from whatever the pick is doing and goes there through the planner's checks.
+    void requestPoint(const Eigen::Vector3d &grasp_point);  // arm frame
+    void requestPosture(const Joints &reported);
 
     // --- sensors, stamps in seconds on io.now()'s clock ---
     void cloudSeen();
@@ -143,6 +146,8 @@ private:
     void  noteSteer(const std::string &note);
     double offGoal(const Joints &q) const;
     Event follow(std::string &message);
+    Event advance(bool hold, std::string &message);
+    Event manual(std::string &message);
     std::string motionReport();
     Event checkJaw(std::string &message);
     bool  handleCaught();
@@ -172,6 +177,10 @@ private:
     double            jaw_ = 0.0;
 
     std::atomic<bool> start_requested_{false}, stop_requested_{false}, working_{false}, steer_requested_{false}, skip_requested_{false};
+    std::atomic<bool> manual_requested_{false};
+    bool              manual_is_point_ = false, manual_planned_ = false;
+    Eigen::Vector3d   manual_point_    = Eigen::Vector3d::Zero();
+    Joints            manual_posture_{};
     State             state_ = State::READY;
     bool              spot_phase_ = true, grabbed_ = false;
     uint32_t          park_attempt_ = 0, look_attempt_ = 0;

@@ -5,6 +5,7 @@
 #include <pairs.h>
 #include <pick.h>
 
+#include <geometry_msgs/Point.h>
 #include <geometry_msgs/PoseArray.h>
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -470,6 +471,8 @@ public:
         cloud_sub_  = nh_.subscribe("cloud", 1, &PickNode::onCloud, this);
         poses_sub_  = nh_.subscribe("poses", 10, &PickNode::onPoses, this);
         joints_sub_ = nh_.subscribe("joint_states", 1, &PickNode::onJoints, this);
+        point_sub_   = pnh.subscribe("point", 1, &PickNode::onPoint, this);
+        posture_sub_ = pnh.subscribe("posture", 1, &PickNode::onPosture, this);
         services_   = {pnh.advertiseService("start", &PickNode::onStart, this), pnh.advertiseService("stop", &PickNode::onStop, this),
                        pnh.advertiseService("reset", &PickNode::onReset, this)};
     }
@@ -574,6 +577,23 @@ private:
         }
     }
 
+    // Manual commands: where to put the grasp point, metres in the arm frame; or every joint, radians as reported.
+    void onPoint(const geometry_msgs::Point::ConstPtr &msg) { pick_.requestPoint(Eigen::Vector3d(msg->x, msg->y, msg->z)); }
+
+    void onPosture(const sensor_msgs::JointState::ConstPtr &msg) {
+        const PickConfig &c = pick_.config();
+        Joints            q;
+        for (int j = 0; j < JOINT_COUNT; ++j) {
+            const size_t i = std::find(msg->name.begin(), msg->name.end(), c.joint_names[j]) - msg->name.begin();
+            if (i >= msg->name.size() || i >= msg->position.size() || !std::isfinite(msg->position[i])) {
+                ROS_WARN("[pick] posture ignored: it must name every joint, %s is missing", c.joint_names[j].c_str());
+                return;
+            }
+            q[j] = msg->position[i];
+        }
+        pick_.requestPosture(q);
+    }
+
     bool onStart(std_srvs::Trigger::Request &, std_srvs::Trigger::Response &res) {
         bool steer = pick_.config().track_steer;
         ros::param::get("~track/steer", steer);
@@ -603,7 +623,7 @@ private:
     ros::NodeHandle                                                                        nh_;
     std::mutex                                                                             pairs_mutex_;
     FramePairs<sensor_msgs::PointCloud2::ConstPtr, geometry_msgs::PoseArray::ConstPtr>     pairs_;
-    ros::Subscriber                                                                        cloud_sub_, poses_sub_, joints_sub_;
+    ros::Subscriber                                                                        cloud_sub_, poses_sub_, joints_sub_, point_sub_, posture_sub_;
     std::vector<ros::ServiceServer>                                                        services_;
 };
 

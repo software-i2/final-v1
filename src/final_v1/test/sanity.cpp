@@ -55,6 +55,10 @@ TEST(Fsm, WalksThePickAndLatchesStops) {
     EXPECT_EQ(nextState(State::PICKGRASP, Event::PLAN_ONLY), State::SUCCESS);
     EXPECT_EQ(nextState(State::READY, Event::FAILURE), State::READY);
     EXPECT_EQ(nextState(State::ESTOP, Event::START), State::STREAM);
+    EXPECT_EQ(nextState(State::GOTOGRASP, Event::GOTO), State::MANUAL);
+    EXPECT_EQ(nextState(State::ESTOP, Event::GOTO), State::MANUAL);
+    EXPECT_EQ(nextState(State::MANUAL, Event::REACHED), State::READY);
+    EXPECT_EQ(nextState(State::MANUAL, Event::STOP), State::ESTOP);
 }
 
 // The follower reaches its goal, and flags a joint whose fresh readings stop moving.

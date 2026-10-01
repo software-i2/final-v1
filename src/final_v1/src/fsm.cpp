@@ -6,7 +6,8 @@ namespace final_v1 {
 const char *stateName(State s) {
     static const char *const kNames[] = {"READY",     "STREAM",    "COLLECT",  "PROCESS", "PICKSPOT",
                                          "RESURVEY",  "PICKGRASP", "GOTOGRASP", "CLOSEJAW",
-                                         "RETARGET",  "REPARK",    "SUCCESS",  "FAIL",    "ESTOP"};
+                                         "RETARGET",  "REPARK",    "MANUAL",   "SUCCESS", "FAIL",
+                                         "ESTOP"};
     return kNames[static_cast<int>(s)];
 }
 
@@ -24,6 +25,9 @@ State nextState(State s, Event e) {
     }
     if (e == Event::START) {
         return isWorking(s) ? s : State::STREAM;
+    }
+    if (e == Event::GOTO) {
+        return State::MANUAL;
     }
     switch (s) {
     case State::STREAM:
@@ -54,6 +58,8 @@ State nextState(State s, Event e) {
         return e == Event::LOOK_AGAIN ? State::COLLECT : e == Event::OUT_OF_LOOKS ? State::REPARK : s;
     case State::REPARK:
         return e == Event::PARK_AGAIN ? State::COLLECT : e == Event::OUT_OF_PARKS ? State::FAIL : s;
+    case State::MANUAL:
+        return e == Event::REACHED ? State::READY : e == Event::STALLED ? State::FAIL : s;
     default:
         return s;
     }

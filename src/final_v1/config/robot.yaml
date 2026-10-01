@@ -47,7 +47,7 @@ jaws:
 camera:
   frame: camera_link
   source: ikan/camera_link               # the frame the vehicle stamps this camera's data with: x right, y down, looking along +z
-  mount: {xyz: [0.45, 0.05, 0.0], rpy: [0.0, 0.0, 0.0]}  # camera_mount in the vehicle frame
+  mount: {xyz: [0.45, 0.05, 0.0], rpy: [0.0, 15.0, 0.0]}  # camera_mount in the vehicle frame
   optical: [90.0, 0.0, -90.0]            # camera_link in camera_mount: x right, y up, looking down -z
   intrinsics: {width: 800, height: 600, fx: 479.2662, fy: 479.2662, cx: 397.9827, cy: 322.8405}  # px
 

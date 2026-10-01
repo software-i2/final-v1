@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <map>
+#include <numeric>
 #include <random>
 
 namespace final_v1 {
@@ -272,6 +273,28 @@ Plan planGrasp(const std::vector<GraspPose> &candidates, const Joints &start, Co
     for (const auto &t : tally) {
         plan.summary += " " + std::to_string(t.second) + " " + t.first;
     }
+    return plan;
+}
+
+Plan planTo(const std::vector<Joints> &goals, const Joints &start, Collision &collision, const PlanSettings &s,
+            const std::function<bool()> &cancelled) {
+    std::vector<size_t> order(goals.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return largestMove(start, goals[a]) < largestMove(start, goals[b]); });
+    Plan plan;
+    for (const size_t g : order) {
+        if (connect(start, goals[g], collision, s, s.goal_budget_s, cancelled, plan.path)) {
+            plan.ok        = true;
+            plan.candidate = g;
+            for (size_t k = 1; k < plan.path.size(); ++k) {
+                plan.time_s += largestMove(plan.path[k - 1], plan.path[k]) / s.joint_speed;
+            }
+            break;
+        }
+    }
+    char line[120];
+    std::snprintf(line, sizeof(line), plan.ok ? "%.2f s of arm motion over %zu corners" : "no path", plan.time_s, plan.path.size());
+    plan.summary = line;
     return plan;
 }
 

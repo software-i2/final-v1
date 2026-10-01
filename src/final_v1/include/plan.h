@@ -44,6 +44,10 @@ struct Plan {
 Plan planGrasp(const std::vector<GraspPose> &candidates, const Joints &start, Collision &collision, const PlanSettings &s,
                const std::function<bool()> &cancelled);
 
+// Plans to the allowed postures in turn, the least joint move first, and keeps the first that joins; `candidate` is its index.
+Plan planTo(const std::vector<Joints> &goals, const Joints &start, Collision &collision, const PlanSettings &s,
+            const std::function<bool()> &cancelled);
+
 // Seeds the planner's random numbers, so a run can be repeated.
 void seedPlanner(unsigned seed);
 

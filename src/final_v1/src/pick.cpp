@@ -29,6 +29,14 @@ void Pick::tick() {
             io_.log(Level::ERROR, "stop: standby failed, the arm may still be powered");
         }
     }
+    if (manual_requested_.exchange(false)) {
+        if (c_.arm_move) {
+            manual_planned_ = false;
+            apply(Event::GOTO, "manual command");
+        } else {
+            io_.log(Level::WARN, "manual command ignored: the arm is not to move");
+        }
+    }
     if (start_requested_.exchange(false)) {
         if (isWorking(state_)) {
             io_.log(Level::WARN, std::string("start ignored: already in ") + stateName(state_));
@@ -64,6 +72,20 @@ void Pick::requestStart(bool steer, bool skip_park) {
     steer_requested_ = steer;
     skip_requested_  = skip_park;
     start_requested_ = true;
+}
+
+void Pick::requestPoint(const Eigen::Vector3d &grasp_point) {
+    std::lock_guard<std::mutex> lock(sensor_mutex_);
+    manual_point_     = grasp_point;
+    manual_is_point_  = true;
+    manual_requested_ = true;
+}
+
+void Pick::requestPosture(const Joints &reported) {
+    std::lock_guard<std::mutex> lock(sensor_mutex_);
+    manual_posture_   = reported;
+    manual_is_point_  = false;
+    manual_requested_ = true;
 }
 
 bool Pick::reset(std::string &message) {
@@ -249,6 +271,7 @@ Event Pick::step(std::string &message) {
     case State::PICKSPOT: return pickSpot(message);
     case State::PICKGRASP: return pickGrasp(message);
     case State::GOTOGRASP: return follow(message);
+    case State::MANUAL: return manual(message);
     case State::CLOSEJAW: return checkJaw(message);
     case State::RESURVEY: return retry(surveying_since_, c_.spot_search_s, false, Event::SURVEY_AGAIN, Event::OUT_OF_TIME, message);
     case State::RETARGET:
@@ -556,6 +579,15 @@ Event Pick::follow(std::string &message) {
             return Event::REACHED;
         }
     }
+    const Event event = advance(hold, message);
+    if (event == Event::REACHED || event == Event::COLLIDED) {
+        detail_ = motionReport();
+    }
+    return event;
+}
+
+// Sends the next waypoint unless holding, and says how the following is going.
+Event Pick::advance(bool hold, std::string &message) {
     Joints          target;
     bool            send  = false;
     const Following state = hold ? Following::SENDING : follower_.tick(io_.now(), target, send);
@@ -565,7 +597,6 @@ Event Pick::follow(std::string &message) {
     switch (state) {
     case Following::REACHED:
         message = "path end";
-        detail_ = motionReport();
         return Event::REACHED;
     case Following::STALLED:
         io_.standby();
@@ -573,11 +604,80 @@ Event Pick::follow(std::string &message) {
         return Event::STALLED;
     case Following::BLOCKED:
         message = c_.joint_names[follower_.blockedJoint()] + " blocked";
-        detail_ = motionReport();
         return Event::COLLIDED;
     default:
         return Event::NONE;
     }
+}
+
+// A manual command: plans once from where the arm is, against the limits, the hull and the last look's map, then follows.
+Event Pick::manual(std::string &message) {
+    Joints reported;
+    double stamp = 0.0;
+    if (!freshJoints(reported, stamp)) {
+        message = !manual_planned_ ? "no fresh joints"
+                  : io_.standby()  ? "joints stale mid-motion, arm released"
+                                   : "joints stale mid-motion; standby failed, the arm may still be powered";
+        return Event::FAILURE;
+    }
+    if (manual_planned_) {
+        if (stamp != last_stamp_) {
+            last_stamp_ = stamp;
+            follower_.measure(arm_.toModel(reported));
+        }
+        return advance(false, message);
+    }
+    bool            is_point = false;
+    Eigen::Vector3d point;
+    Joints          posture;
+    {
+        std::lock_guard<std::mutex> lock(sensor_mutex_);
+        is_point = manual_is_point_;
+        point    = manual_point_;
+        posture  = manual_posture_;
+    }
+    const Joints        start = arm_.clamped(arm_.toModel(reported));
+    std::vector<Joints> goals;
+    Outcome             refused = Outcome::UNREACHABLE;
+    try {
+        grid_.reset(new ObstacleGrid(scene_.map, c_.park.link_radius, bladeRadius(c_.park.blade_step)));
+    } catch (const std::invalid_argument &e) {
+        message = std::string("the obstacle map is not usable: ") + e.what();
+        return Event::FAILURE;
+    }
+    Collision  collision(arm_, *grid_, c_.hull, c_.park.link_step);
+    const auto offer = [&](const Joints &q) {
+        const Outcome o = outcomeOf(collision.check(q));
+        refused         = std::max(refused, o);
+        if (o == Outcome::OK) {
+            goals.push_back(q);
+        }
+    };
+    if (is_point) {
+        const double along = arm_.mountDistance() + c_.plan.grasp_point_from_mount;
+        for (const bool elbow_up : {false, true}) {
+            Joints q;
+            const Ik ik = arm_.solve(point, along, elbow_up, start, q);
+            if (ik == Ik::SOLVED) {
+                offer(q);
+            } else if (ik == Ik::JOINT_LIMIT) {
+                refused = std::max(refused, Outcome::JOINT_LIMIT);
+            }
+        }
+    } else {
+        offer(arm_.toModel(posture));
+    }
+    plan_ = planTo(goals, start, collision, c_.plan, [this] { return stop_requested_.load(); });
+    publishPath();
+    if (!plan_.ok) {
+        message = std::string("manual command refused: ") + (goals.empty() ? outcomeName(refused) : "no path there");
+        return Event::FAILURE;
+    }
+    detail_ = plan_.summary;
+    follower_.load(plan_.path);
+    last_stamp_     = 0.0;
+    manual_planned_ = true;
+    return Event::NONE;
 }
 
 double Pick::offGoal(const Joints &q) const {
