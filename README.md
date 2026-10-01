@@ -53,3 +53,10 @@ rosservice call /pick/stop
 rosservice call /pick/reset
 rosrun final_v1 arm.py home
 ```
+
+## missions
+grab object on land / water
+```bash
+roslaunch final_v1 pick.launch park:=false close:=false
+```
+
