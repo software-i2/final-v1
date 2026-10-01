@@ -618,41 +618,58 @@ TEST(Cloud, AFlatCloudGoesBackOnItsPixels) {
     }
 }
 
-// A cloud is taken at most every gap and joined with the poses stamped nearest it, whichever of the two arrives first.
-TEST(Pairs, TakesACloudPerGapAndJoinsItsPoses) {
+// Poses take the cloud stamped nearest them out of those held, whichever of the two arrives first; a pair goes out at most every gap.
+TEST(Pairs, PosesTakeTheirCloudAndAPairGoesOutPerGap) {
     const int64_t        ms = 1000000;
-    FramePairs<int, int> pairs(0.5, 0.001, 2.0);
+    FramePairs<int, int> pairs(0.5, 0.010, 2.0);
     int                  cloud = 0, poses = 0;
+    int64_t              nearest = 0;
 
     pairs.addPoses(1000 * ms, 10);
     EXPECT_FALSE(pairs.next(cloud, poses));
-    EXPECT_TRUE(pairs.addCloud(1000 * ms - 50, 1)) << "50 ns off its poses, as the vehicle stamps them";
-    ASSERT_TRUE(pairs.next(cloud, poses));
+    pairs.addCloud(1000 * ms - 50, 1);
+    ASSERT_TRUE(pairs.next(cloud, poses)) << "50 ns off its poses, as the vehicle stamps them";
     EXPECT_EQ(cloud, 1);
     EXPECT_EQ(poses, 10);
 
-    EXPECT_FALSE(pairs.addCloud(1155 * ms, 2)) << "sooner than the gap";
-    EXPECT_FALSE(pairs.addCloud(1310 * ms, 3));
-    pairs.addPoses(1155 * ms, 20);
-    EXPECT_TRUE(pairs.addCloud(1620 * ms - 100, 4));
-    EXPECT_FALSE(pairs.next(cloud, poses)) << "the only poses held are 465 ms away";
-    pairs.addPoses(1620 * ms, 40);
+    pairs.addCloud(1200 * ms, 2);
+    pairs.addPoses(1200 * ms, 20);
+    EXPECT_FALSE(pairs.next(cloud, poses)) << "a pair sooner than the gap";
+
+    pairs.addCloud(1400 * ms, 3);
+    pairs.addCloud(1600 * ms, 4);
+    pairs.addCloud(1800 * ms, 5);
+    pairs.addPoses(1603 * ms, 40);
     ASSERT_TRUE(pairs.next(cloud, poses));
-    EXPECT_EQ(cloud, 4);
+    EXPECT_EQ(cloud, 4) << "the frame at 1400 got no poses; these are the 1600 frame's, stamped 3 ms off";
     EXPECT_EQ(poses, 40);
 
-    EXPECT_TRUE(pairs.addCloud(2200 * ms, 5));
-    pairs.addPoses(4300 * ms, 60);
-    EXPECT_TRUE(pairs.addCloud(4300 * ms - 8, 6));
-    ASSERT_TRUE(pairs.next(cloud, poses));
-    EXPECT_EQ(cloud, 6) << "cloud 5 waited past `wait` for poses that never came";
-    EXPECT_EQ(poses, 60);
-    EXPECT_FALSE(pairs.next(cloud, poses));
-
-    EXPECT_TRUE(pairs.addCloud(100 * ms, 7)) << "the clock went back: start over rather than wait for it to catch up";
-    pairs.addPoses(100 * ms, 70);
+    pairs.addPoses(2230 * ms, 50);
+    pairs.addCloud(2200 * ms, 6);
+    EXPECT_FALSE(pairs.next(cloud, poses)) << "30 ms apart is past the slop";
+    EXPECT_FALSE(pairs.missed(nearest)) << "still waiting";
+    pairs.addCloud(4300 * ms, 7);
+    ASSERT_TRUE(pairs.missed(nearest)) << "poses 50 waited past `wait`";
+    EXPECT_EQ(nearest, 30 * ms);
+    EXPECT_FALSE(pairs.missed(nearest));
+    pairs.addPoses(4300 * ms + 8, 70);
     ASSERT_TRUE(pairs.next(cloud, poses));
     EXPECT_EQ(cloud, 7);
+    EXPECT_EQ(poses, 70);
+    EXPECT_FALSE(pairs.next(cloud, poses));
+
+    pairs.addCloud(100 * ms, 8);
+    pairs.addPoses(100 * ms, 80);
+    ASSERT_TRUE(pairs.next(cloud, poses)) << "the clock went back: start over rather than wait for it to catch up";
+    EXPECT_EQ(cloud, 8);
+
+    FramePairs<int, int> stuck(0.5, 0.010, 2.0);
+    for (int i = 0; i < 100; ++i) {
+        stuck.addCloud(5000 * ms, i);
+    }
+    stuck.addPoses(5000 * ms, 90);
+    ASSERT_TRUE(stuck.next(cloud, poses));
+    EXPECT_EQ(cloud, 88) << "a stamp that never advances: only the last 12 clouds are still held";
 }
 
 int main(int argc, char **argv) {

@@ -503,12 +503,23 @@ private:
     void handOut() {
         sensor_msgs::PointCloud2::ConstPtr   cloud;
         geometry_msgs::PoseArray::ConstPtr   poses;
+        int64_t                              nearest = 0;
         for (;;) {
+            bool missed = false;
             {
                 std::lock_guard<std::mutex> lock(pairs_mutex_);
-                if (!pairs_.next(cloud, poses)) {
+                missed = pairs_.missed(nearest);
+                if (!missed && !pairs_.next(cloud, poses)) {
                     return;
                 }
+            }
+            if (missed) {
+                char near[48] = "none was held";
+                if (nearest >= 0) {
+                    std::snprintf(near, sizeof(near), "the nearest was %.1f ms away", nearest / 1e6);
+                }
+                ROS_WARN_THROTTLE(5.0, "[pick] poses dropped: no cloud stamped within %.1f ms of them, %s", 1e3 * pick_.config().pair_slop, near);
+                continue;
             }
             onFrame(cloud, poses);
         }
@@ -516,14 +527,15 @@ private:
 
     void onCloud(const sensor_msgs::PointCloud2::ConstPtr &cloud) {
         pick_.cloudSeen();
+        const int64_t stamp = static_cast<int64_t>(cloud->header.stamp.toNSec());
         {
             std::lock_guard<std::mutex> lock(pairs_mutex_);
-            if (!pairs_.addCloud(static_cast<int64_t>(cloud->header.stamp.toNSec()), cloud)) {
-                return;
-            }
+            pairs_.addCloud(stamp, cloud);
         }
+        const bool                   due = stamp < tracked_ || stamp - tracked_ >= static_cast<int64_t>(pick_.config().pair_gap * 1e9);
         std::vector<Eigen::Vector3f> points;
-        if (pick_.tracking() && cameraPoints(*cloud, points)) {
+        if (due && pick_.tracking() && cameraPoints(*cloud, points)) {
+            tracked_ = stamp;
             pick_.trackFrame(points);
         }
         handOut();
@@ -595,6 +607,11 @@ private:
     }
 
     bool onStart(std_srvs::Trigger::Request &, std_srvs::Trigger::Response &res) {
+        for (const ros::Subscriber *sub : {&cloud_sub_, &poses_sub_}) {
+            if (sub->getNumPublishers() == 0) {
+                ROS_WARN("[pick] no publisher connected on %s", sub->getTopic().c_str());
+            }
+        }
         bool steer = pick_.config().track_steer;
         ros::param::get("~track/steer", steer);
         bool skip = pick_.config().park_skip;
@@ -623,6 +640,7 @@ private:
     ros::NodeHandle                                                                        nh_;
     std::mutex                                                                             pairs_mutex_;
     FramePairs<sensor_msgs::PointCloud2::ConstPtr, geometry_msgs::PoseArray::ConstPtr>     pairs_;
+    int64_t                                                                                tracked_ = 0;
     ros::Subscriber                                                                        cloud_sub_, poses_sub_, joints_sub_, point_sub_, posture_sub_;
     std::vector<ros::ServiceServer>                                                        services_;
 };

@@ -23,7 +23,7 @@ cloud:
   frames: 5                              # frames for averaging
   timeout: 10.0                          # give up if no new frames arrive
   period: 0.5                            # take a cloud at most this often
-  slop: 0.001                            # a cloud and its poses are stamped this close
+  slop: 0.010                            # a cloud and its poses are stamped this close
   wait: 2.0                              # for the other of the two to arrive
   voxel: 0.0025                          # 2.5mm voxels
   margin: 1.0                            # crop for the parking look, added to the arm's reach; the grasp look crops to reach + track/shift
