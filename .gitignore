@@ -1,0 +1,11 @@
+build/
+devel/
+logs/
+install/
+.catkin_tools/
+data/*
+!data/.gitkeep
+graphify-out/
+
+*.bag
+__pycache__/
