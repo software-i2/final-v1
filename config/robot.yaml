@@ -1,0 +1,69 @@
+# Reach Alpha 5 on the vehicle. Loaded into /robot and read by the URDF. Lengths m, angles deg, times s.
+
+frames: {vehicle: vehicle_base, arm: arm_base}
+
+arm:
+  joints: {base: axis_e, shoulder: axis_d, elbow: axis_c, wrist: axis_b, jaw: axis_a, mount: ee_joint}  # mount: the fixed joint wrist to jaw mount
+  limits:                                # reported angles, inside the vendor URDF's
+    base: [90.0, 349.0]  # 90 is the limit of the base housing, 349 is the limit of the shoulder housing
+    shoulder: [0.0, 200.0]
+    elbow: [0.0, 184.5]
+    wrist: [0.0, 184.5]
+  home: {base: 349.0, shoulder: 90.0, elbow: 0.0, wrist: 0.0}  # shoulder under ~80 hits the base housing
+  clearance: 85.0                        # shoulder clear of the housing
+  offset: {base: 2.403, shoulder: 0.0, elbow: 0.0, wrist: 0.0}  # model = sign * (reported - offset)
+  sign: {base: 1, shoulder: 1, elbow: 1, wrist: -1}
+  mount: {xyz: [0.50, 0.13, -0.15], rpy: [180.0, 0.0, 0.0]}  # arm_base in the vehicle frame
+
+jaws:
+  limits: [0.0013, 0.0133]               # fully closed, fully open
+  open: 0.007
+  throat: 0.0300                         # from the mount
+  tip: 0.0969                            # from the mount
+  palm: 0.00975
+  roll: -60.0                            # hinge roll at wrist zero
+  swing: 51.0                            # rad each blade swings per metre of opening
+  hinge: {closing: 0.0155, approach: 0.0069}
+  profile:                               # per 5 mm band: approach min, max, closing min, max, hinge half width
+    - [-0.0050, 0.0000, -0.0252, 0.0051, 0.0057]
+    - [0.0000, 0.0050, -0.0252, 0.0058, 0.0057]
+    - [0.0050, 0.0100, -0.0202, 0.0063, 0.0057]
+    - [0.0100, 0.0150, -0.0165, 0.0066, 0.0057]
+    - [0.0150, 0.0200, -0.0153, 0.0067, 0.0049]
+    - [0.0200, 0.0250, -0.0144, 0.0067, 0.0049]
+    - [0.0250, 0.0300, -0.0138, 0.0065, 0.0049]
+    - [0.0300, 0.0350, -0.0137, 0.0060, 0.0049]
+    - [0.0350, 0.0400, -0.0139, 0.0052, 0.0049]
+    - [0.0400, 0.0450, -0.0145, 0.0043, 0.0049]
+    - [0.0450, 0.0500, -0.0156, 0.0030, 0.0049]
+    - [0.0500, 0.0550, -0.0168, 0.0015, 0.0049]
+    - [0.0550, 0.0600, -0.0184, -0.0003, 0.0049]
+    - [0.0600, 0.0650, -0.0202, -0.0024, 0.0049]
+    - [0.0650, 0.0700, -0.0211, -0.0048, 0.0049]
+    - [0.0700, 0.0750, -0.0211, -0.0076, 0.0049]
+    - [0.0750, 0.0800, -0.0211, -0.0107, 0.0049]
+    - [0.0800, 0.0852, -0.0211, -0.0143, 0.0049]
+
+camera:
+  frame: camera_link
+  source: ikan/camera_link               # the frame the vehicle stamps this camera's data with: x right, y down, looking along +z
+  mount: {xyz: [0.45, 0.05, 0.0], rpy: [0.0, 0.0, 0.0]}  # camera_mount in the vehicle frame
+  optical: [90.0, 0.0, -90.0]            # camera_link in camera_mount: x right, y up, looking down -z
+  intrinsics: {width: 800, height: 600, fx: 479.2662, fy: 479.2662, cx: 397.9827, cy: 322.8405}  # px
+
+hull:                                    # in arm_base
+  x: [-0.80, 0.10]
+  y: [-0.40, 0.40]
+  floor: -1.0e-6
+
+driver:
+  port: /dev/ttyS4
+  baud: 115200
+  ids: {jaw: 1, wrist: 2, elbow: 3, shoulder: 4, base: 5}
+  rate: 10.0                             # Hz
+  timeout: 0.05                          # for a reply
+  attempts: 5                            # to connect
+  retry: 2.0                             # between attempts
+  wake: 0.573                            # deg/s, tiny wrist speed that wakes the arm
+  jump: 5.0                              # deg; a joint target further than this from the joint's last reading is refused
+  speed: {joint: 20.0, jaw: 0.010}       # deg/s and m/s: home ramp

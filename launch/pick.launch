@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!-- Copyright by BeeX [2026] -->
+<launch>
+    <arg name="pick" default="true" doc="move arm"/>
+    <arg name="park" default="true" doc="move auv"/>
+    <arg name="track" default="true" doc="track target"/>
+    <arg name="steer" default="true" doc="steer arm towards target"/>
+    <arg name="close" default="true" doc="close jaw"/>
+    <arg name="parent" default="ikan/base_link" doc="vehicle's body frame"/>
+    <arg name="cloud" default="/explore3d/points"/>
+    <arg name="poses" default="/grasp_poses_by_pipeline"/>
+    <arg name="config" value="$(find final_v1)/config"/>
+    <env name="ROSCONSOLE_FORMAT" value="${walltime:%H:%M:%S} ${severity} ${message}"/>
+
+    <group ns="robot" clear_params="true">
+        <rosparam command="load" file="$(arg config)/robot.yaml"/>
+    </group>
+    <param name="robot_description" command="$(find xacro)/xacro $(find final_v1)/urdf/robot.urdf.xacro config:=$(arg config)/robot.yaml parent:=$(arg parent)"/>
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+
+    <node name="driver" pkg="final_v1" type="driver" output="screen" required="true" clear_params="true"/>
+
+    <!-- required: if pick dies the launch goes down and the driver releases the arm, instead of holding its last target -->
+    <node name="pick" pkg="final_v1" type="pick" output="screen" required="true" clear_params="true">
+        <rosparam command="load" file="$(arg config)/pick.yaml"/>
+        <param name="arm/move" value="$(arg pick)"/>
+        <param name="jaw/close" value="$(arg close)"/>
+        <param name="park/skip" value="$(eval not park)"/>
+        <param name="track/enabled" value="$(arg track)"/>
+        <param name="track/steer" value="$(arg steer)"/>
+        <remap from="cloud" to="$(arg cloud)"/>
+        <remap from="poses" to="$(arg poses)"/>
+    </node>
+</launch>

@@ -1,0 +1,82 @@
+# The pick. Loaded into /pick. Lengths m, angles deg, times s.
+
+rate: 20.0                               # Hz, for state machine
+stale: 0.5                               # joint readings older than this are stale
+
+task:
+  stream: 10.0                           # initial check that camera is streaming
+  search: 60.0                           # give up if no parking spot found
+  repark: 60.0                           # give up if stuck at same parking spot
+  looks: 10                              # looks from one parking spot to find at least one grasp pose
+  parks: 3                               # tries before calling it a failure
+
+jaw:
+  settle: 0.0001                         # the jaw is still while it moves less than this
+  still: 1.0                             # for this long
+  margin: 0.005                          # check that handle is actually grabbed
+  timeout: 5.0
+  near: 0.005                            # close once the grasp point is this close to the handle
+  hold: 2.0                              # for this long
+  catch: 20.0                            # deg; with the jaw left open: the handle holds between the open blades, cloud/handle clear of both, leaning no more than this into the closing line; the launch file sets close
+
+cloud:
+  frames: 5                              # frames for averaging
+  timeout: 10.0                          # give up if no new frames arrive
+  period: 0.5                            # take a cloud at most this often
+  slop: 0.001                            # a cloud and its poses are stamped this close
+  wait: 2.0                              # for the other of the two to arrive
+  voxel: 0.0025                          # 2.5mm voxels
+  margin: 1.0                            # crop for the parking look, added to the arm's reach; the grasp look crops to reach + track/shift
+  columns: {approach: 0, bar: 1}         # of the grasp pose rotation
+  flying: {tolerance: 0.003, neighbours: 5, window: 5}  # flying pixels; window in px
+  occupancy: {points: 2, free: 0.005, tilt: 85.0}
+  handle: 0.01                           # handle radius
+  gap: 0.015                             # bar gap
+  corridor: {length: 0.05, radius: 0.01}
+  consensus: {frames: 2, match: 0.010, axis: 20.0, outlier: 0.006, spread: 0.003, duplicate: 0.005}
+  vote: {frames: 2, radius: 1}           # radius in voxels
+
+collision:
+  radius: 0.020                          # link
+  step: 0.002                            # along a link
+  blade: 0.0025                          # between blade samples
+  grasp: 0.050                           # grasp point from the mount, smaller for deeper grasp
+
+park:                                    # choosing where the vehicle parks; the launch file sets skip
+  box: {xy: 1.0, z: 0.5, yaw: 45.0}      # 1m x 1m x 0.5m box
+  coarse: {step: 0.100, yaw: 9.0}
+  fine: {step: 0.025, yaw: 3.0}
+  refine: 4                              # coarse cells refined around
+  standoff: [0.30, 0.40]                 # a grasp only counts while the camera is this far from it
+  screen: {count: 3000, budget: 10.0, stride: 20}  # most poses screened against the obstacle map; every nth blade sample
+  exact: 10                              # best drivable poses rechecked at full fidelity
+  band: 5.0                              # poses this close to the least arm swing count as equal; more holds, then the shorter drive
+  transit: 16                            # points along the drive where the arm is checked
+  cell: 0.002                            # reach table
+
+plan:
+  tolerance: 1.5                         # a start this far past a limit is snapped onto it
+  budget: 10.0
+  goal: 0.5                              # budget per grasp posture
+  range: 57.2958                         # longest RRTConnect extension 1 rad max
+  step: 1.0                              # collision check spacing along every edge
+  seed: 1
+
+follow:
+  step: 0.5                              # per loop tick, so the speed limit is rate times this
+  tolerance: 1.5                         # arrival
+  timeout: 15.0                          # arrival
+  deadline: 60.0                         # the whole motion to the handle, steering holds included; past it the arm is released
+  blocked: {step: 0.2, fraction: 0.2, strikes: 10}  # joints asked to move at least step are watched; moving less than fraction of the command is a strike
+
+track:                                   # following the mine while the arm moves blind: its shape fitted to the cloud; the launch file sets enabled and steer
+  retarget: 0.01                         # retarget once the tracked target is this far from where the arm is heading
+  shift: 0.10                            # a tracked shift past this is taken as a tracking failure and ignored
+  commit: 0.03
+  replan: 0.2                            # no straight way to the shifted goal: plan around it this long, the arm waiting
+  gate: 0.010                            # a cloud point this far from the fitted shape does not count
+  fit: 0.55                              # at the look the shape must land this share of itself on the cloud, else open loop
+  seen: 0.3                              # under this share of the look's matches a frame's fit is held, not trusted
+  speed: 0.10                            # m/s; the fit moving the mine faster than this is a wrong lock, not the mine
+  mines:                                 # face, base, height; every mine is tried at the look and the best fit is tracked
+    limpet: [0.205, 0.350, 0.115]        # the tank mock, measured from the bag

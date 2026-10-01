@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>final_v1</name>
+  <version>3.0.0</version>
+  <description>Handle grasping for a Reach Alpha 5 on a parked vehicle, tracking the mine by fitting its CAD to the cloud.</description>
+  <maintainer email="software-i@beex.sg">software-i2</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+  <exec_depend>message_runtime</exec_depend>
+
+  <depend>eigen</depend>
+  <depend>geometry_msgs</depend>
+  <depend>roscpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>urdf</depend>
+  <depend>visualization_msgs</depend>
+
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <test_depend>kdl_parser</test_depend>
+</package>
